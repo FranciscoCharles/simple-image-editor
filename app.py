@@ -20,7 +20,7 @@ class MainWindow(wx.Frame):
 		icon = wx.Bitmap('images/icon_exit.ico',type=wx.BITMAP_TYPE_ICO)
 		icon = Simage.scale_bitmap(icon,35,40)
 		shortcut_exit = self.toolbar.AddTool(21, 'exit', icon)
-		self.Bind(wx.EVT_TOOL,self.__OnQuit,shortcut_exit)
+		self.Bind(wx.EVT_TOOL,self.onCloseWindow, shortcut_exit)
 		self.toolbar.Realize()
 
 		self.statusbar = self.CreateStatusBar()
@@ -56,13 +56,13 @@ class MainWindow(wx.Frame):
 		painel.SetSizer(hbox)
 
 		self.Center()
-		self.Bind(wx.EVT_CLOSE, self.OnCloseWindow)
+		self.Bind(wx.EVT_CLOSE, self.onCloseWindow)
 
 	def onChanceItemList(self, event):
 		index_item = self.listbox.GetSelection()
 		self.current_image = self.list_images[index_item]
-		image = self.current_image.current
-		self.updateImage(image)
+		bitmap = self.current_image.toWxbitmap()
+		self.updateImage(bitmap)
 
 	def onUndo(self,event):
 		if self.current_image:
@@ -72,7 +72,7 @@ class MainWindow(wx.Frame):
 		if self.current_image:
 			self.current_image.redo()
 
-	def OnCloseWindow(self, event):
+	def onCloseWindow(self, event):
 		''' 
 		messagebox = wx.MessageDialog(None, 'Are you sure to quit?', 'Question',
 			 wx.YES_NO | wx.CENTRE | wx.NO_DEFAULT  | wx.ICON_INFORMATION)
@@ -83,14 +83,26 @@ class MainWindow(wx.Frame):
 			self.Destroy()
 		else:
 			event.Veto() '''
-		self.Destroy()
+		
+		not_saved = any([not img.was_saved for img in self.list_images])
+		if not_saved:
+			messagebox = wx.MessageDialog(None, 'Are you sure to quit?', 'Question',
+			 wx.YES_NO | wx.CENTRE | wx.NO_DEFAULT  | wx.ICON_INFORMATION)
+			response = messagebox.ShowModal()
+
+			if response == wx.ID_YES:
+				self.Destroy()
+			else:
+				event.Veto()
+		else:
+			self.Destroy()
 
 	def setFileMenu(self):
 		menu = wx.Menu()
 
 		file_open = menu.Append(wx.ID_OPEN,'open file\tCtrl+R')
 		file_open.SetHelp(helpString ='open file')
-		self.Bind(wx.EVT_MENU, self.OnOpenFile, file_open)
+		self.Bind(wx.EVT_MENU, self.onOpenFile, file_open)
 
 		file_open = menu.Append(wx.ID_OPEN,'open folder\tCtrl+Shift+R')
 		file_open.SetHelp(helpString ='open folder')
@@ -109,16 +121,16 @@ class MainWindow(wx.Frame):
 
 		submenu = menu.Append(wx.ID_ANY,'cut')
 		submenu.SetHelp(helpString ='cut image')
-		#self.Bind(wx.EVT_MENU, self.OnOpenFile, submenu)
+		#self.Bind(wx.EVT_MENU, self.onOpenFile, submenu)
 		submenu = menu.Append(wx.ID_ANY,'rotate')
 		submenu.SetHelp(helpString ='rotate image')
-		#self.Bind(wx.EVT_MENU, self.OnOpenFile, submenu)
+		#self.Bind(wx.EVT_MENU, self.onOpenFile, submenu)
 		submenu = menu.Append(wx.ID_ANY,'resize')
 		submenu.SetHelp(helpString ='resize imagem')
-		#self.Bind(wx.EVT_MENU, self.OnOpenFile, submenu)
+		#self.Bind(wx.EVT_MENU, self.onOpenFile, submenu)
 		submenu = menu.Append(wx.ID_ANY,'invert')
 		submenu.SetHelp(helpString ='invert image')
-		#self.Bind(wx.EVT_MENU, self.OnOpenFile, submenu)
+		#self.Bind(wx.EVT_MENU, self.onOpenFile, submenu)
 		self.menubar.Append(menu, '&Image')
 
 	def setFilterMenu(self):
@@ -152,8 +164,6 @@ class MainWindow(wx.Frame):
 		submenu.SetHelp(helpString ='redo all images')
 
 		self.menubar.Append(menu, '&Edit')
-	def onClose(self):
-		self.Destroy()
 
 	def setMenuBar(self):
 		#image_menu.SetHelpString(wx.ID_ANY,helpString='opceos de imagem')
@@ -176,7 +186,7 @@ class MainWindow(wx.Frame):
 		self.static_bitmap.SetSize(0,0,w,h)
 		self.static_bitmap.Center()
 
-	def OnOpenFile(self,e):
+	def onOpenFile(self,e):
 		''' Open a file'''
 		files_extensions = [
 			'PNG image (*.png)|*.png;',
@@ -191,16 +201,17 @@ class MainWindow(wx.Frame):
 		if dialog.ShowModal() == wx.ID_OK:
 			image = Simage.Image()
 			image.current = wx.Bitmap(dialog.GetPath())
+			image.was_saved = True
 			filename,_ = Path.splitext(dialog.GetFilename())
 			label = f'{self.listbox.GetCount()} - {filename}'
 			self.listbox.InsertItems([label],self.listbox.GetCount())
 			self.listbox.SetSelection(self.listbox.GetCount()-1)
-			self.updateImage(image.current)
+			self.updateImage(image.toWxbitmap())
 			self.list_images.append(image)
 
 		dialog.Destroy()
 
-	def __OnQuit(self, event):
+	def onQuit(self, event):
 		self.Destroy()
 		#if event.GetMenu() == self.quit_menu:
 
