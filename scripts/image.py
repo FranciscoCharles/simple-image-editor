@@ -1,6 +1,8 @@
 import wx
-from typing import Optional
+import numpy as np
 from PIL import Image as PImage
+from skimage.io import imsave
+from typing import Optional
 
 def pimgResize(image:PImage.Image, size:Optional[tuple]=None,resample:int=PImage.ANTIALIAS) -> PImage.Image:
 	if size is None:
@@ -27,9 +29,16 @@ class Image:
 		self.__list_undo = []
 		self.__list_redo = []
 		self.__current_image = None
+		self.__was_saved = True
 
 	@property
-	def current(self) -> wx.Bitmap:
+	def was_saved(self):
+		return self.__was_saved
+	@was_saved.setter
+	def was_saved(self, state:bool):
+		self.__was_saved = state
+	@property
+	def current(self) -> np.ndarray:
 		return self.__current_image
 	@current.setter
 	def current(self, image):
@@ -46,27 +55,60 @@ class Image:
 			self.current = self.__list_redo.pop()
 
 	def insert(self, image) -> None:
-		if isinstance(image, wx.Bitmap):
+		if isinstance(image, np.ndarray):
+			self.insertNumpyArray(image)
+		elif isinstance(image, wx.Bitmap):
 			self.insertWxBitmap(image)
 		elif isinstance(image, PImage.Image):
 			self.insertPimage(image)
 		else:
 			class_name = image.__class__.__name__
 			raise TypeError(f'no supported type "{class_name}" for image object.')
-
-	def insertWxBitmap(self, image:wx.Bitmap) -> None:
-		if self.__current_image is not None:
-			self.__list_undo.append(self.__current_image)
+		self.was_saved = False
+	def insertNumpyArray(self, image:np.ndarray) -> None:
+		if self.current is not None:
+			self.__list_undo.append(self.current)
 		self.__current_image = image
 
-	def insertPimage(self, image:PImage.Image)-> None:
-		if self.__current_image is not None:
-			self.__list_undo.append(self.__current_image)
-		bitmap = pimg2wxbitmap(image)
-		self.insertWxBitmap(bitmap)
+	def insertWxBitmap(self, bitmap:wx.Bitmap) -> None:
+		if self.current is not None:
+			self.__list_undo.append(self.current)
+		image = wxbitmap2pimg(bitmap)
+		self.__current_image = np.array(image)
 
-	def toPimage(self)-> PImage.Image:
+	def insertPimage(self, image:PImage.Image)-> None:
+		if self.current is not None:
+			self.__list_undo.append(self.current)
+		self.__current_image = np.array(image)
+
+	def toWxbitmap(self)->wx.Bitmap:
+		if self.current is None:
+			return None
+		pilimage = PImage.fromarray(self.current)
+		return pimg2wxbitmap(pilimage)
+
+	def toPimage(self) -> PImage.Image:
 		if self.__current_image is None:
 			return None
-		return wxbitmap2pimg(self.__current_image)
+		return PImage.fromarray(self.current)
+
+	def normalize(self, max_value=255, array_type=np.uint8) -> np.ndarray:
+		img = self.current
+		diff = (img - img.min()).astype('float32')
+		divider = diff.max()
+		if divider == 0:
+			divider = 1
+		normalized_img = diff / divider
+		return (max_value * normalized_img).astype(array_type)
+
+	def save(self, filename, normalize = True, max_value = 255, array_type = np.uint8) -> None:
+		
+		if not isinstance(filename, str):
+			raise ValueError('"filename" type must be str.')
+		if normalize:
+			imsave(filename, self.normalize(max_value, array_type))
+		else:
+			imsave(filename, self.current)
+		
+		self.__was_saved = True
 	
